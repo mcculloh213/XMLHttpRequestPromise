@@ -1,2 +1,2 @@
 # XMLHttpRequestPromise
-Promise-able XMLHttpRequest
+Promise-able XMLHttpRequest using a Builder Pattern to create a fully customizable XMLHttpRequest.
