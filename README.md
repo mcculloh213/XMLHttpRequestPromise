@@ -1,0 +1,2 @@
+# XMLHttpRequestPromise
+Promise-able XMLHttpRequest
