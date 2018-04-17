@@ -1,12 +1,14 @@
 class XMLHttpRequestPromise {
   /**
-   *
+   * XMLHttpRequest Constructor.
    * @returns {XMLHttpRequestPromise}
    */
   constructor() {
     this._xhr = new XMLHttpRequest();
     this._method = 'GET';
     this._url = '/';
+    this._async = true;
+    this._isOpen = false;
     return this;
   }
 
@@ -43,7 +45,17 @@ class XMLHttpRequestPromise {
   };
 
   /**
+   * Gets the async status (Default: true).
+   * @returns {boolean}
+   */
+  get async() {
+    return this._async;
+  }
+
+  /**
    * Sets the HTTP Verb for the XMLHttpRequest.
+   *
+   * This value cannot be modified after the XMLHttpRequest is opened.
    * @param method: HTTP Verb,
    *    GET  (*Constructor Default)
    *    HEAD
@@ -57,6 +69,10 @@ class XMLHttpRequestPromise {
    * @returns {XMLHttpRequestPromise}
    */
   setMethod = (method: string): XMLHttpRequestPromise => {
+    if (this._isOpen) {
+      throw Error(`XMLHttpRequestPromise: XMLHttpRequest is Open, with HTTP Verb ${this._method} going to URL ${this._url}`);
+    }
+
     method = method.toUpperCase();
     switch(method) {
       case 'GET':
@@ -78,11 +94,50 @@ class XMLHttpRequestPromise {
 
   /**
    * Sets the target URL for the XMLHttpRequest.
+   *
+   * This value cannot be modified after the XMLHttpRequest is opened.
    * @param url
    * @returns {XMLHttpRequestPromise}
    */
   setUrl = (url: string): XMLHttpRequestPromise => {
+    if (this._isOpen) {
+      throw Error(`XMLHttpRequestPromise: XMLHttpRequest is Open, with HTTP Verb ${this._method} going to URL ${this._url}`);
+    }
+
     this._url = url;
+    return this;
+  };
+
+  /**
+   * Sets Async value for the XMLHttpRequest.
+   *
+   * This value cannot be modified after the XMLHttpRequest is opened.
+   * @param async
+   *     true: XMLHttpRequest will be sent ASYNC
+   *     false: XMLHttpRequest will be sent SYNCHRONOUSLY
+   * @returns {XMLHttpRequestPromise}
+   */
+  setAsync = (async: boolean): XMLHttpRequestPromise => {
+    if (this._isOpen) {
+      throw Error(`XMLHttpRequestPromise: XMLHttpRequest is Open, with HTTP Verb ${this._method} going to URL ${this._url}`);
+    }
+
+    this._async = async;
+    return this;
+  };
+
+  /**
+   * Opens the XMLHttpRequest.
+   *
+   * Once open, HTTP Method, URL, and Async cannot be modified.
+   * @returns {XMLHttpRequestPromise}
+   */
+  openRequest = (): XMLHttpRequestPromise => {
+    if (this._isOpen) {
+      throw Error(`XMLHttpRequestPromise: XMLHttpRequest is Open, with HTTP Verb ${this._method} going to URL ${this._url}`);
+    }
+    this.xhr.open(this.method, this.url, this.async);
+    this._isOpen = true;
     return this;
   };
 
@@ -105,9 +160,9 @@ class XMLHttpRequestPromise {
    * @param options
    * @returns {XMLHttpRequestPromise}
    */
-  setEventListener = (event: string, callback: Function, optionalCallback?: Function, options?: boolean): XMLHttpRequestPromise => {
+  setEventListener = (event: string, callback: Function, optionalCallback: Function|null, options?: boolean): XMLHttpRequestPromise => {
     let _function;
-    
+
     switch(event) {
       case 'abort':
         _function = (evt) => {
@@ -129,9 +184,9 @@ class XMLHttpRequestPromise {
         };
         break;
       case 'loadend':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'loadstart':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'progress':
         _function = (evt) => {
           if (evt.lengthComputable) {
@@ -143,11 +198,11 @@ class XMLHttpRequestPromise {
         };
         break;
       case 'timeout':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'readystatechange':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       default:
-        throw Error('Invalid listener event property.');
+        throw Error(`XMLHttpRequestPromise: Invalid listener event property ${event}.`);
     }
 
     this.xhr.addEventListener(event, _function, options);
@@ -162,7 +217,7 @@ class XMLHttpRequestPromise {
    * @param options
    * @returns {XMLHttpRequestPromise}
    */
-  setUploadEventListener = (event: string, callback: Function, optionalCallback?: Function, options?: boolean): XMLHttpRequestPromise => {
+  setUploadEventListener = (event: string, callback: Function, optionalCallback: Function|null, options?: boolean): XMLHttpRequestPromise => {
     let _function;
 
     switch(event) {
@@ -186,9 +241,9 @@ class XMLHttpRequestPromise {
         };
         break;
       case 'loadend':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'loadstart':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'progress':
         _function = (evt) => {
           if (evt.lengthComputable) {
@@ -200,11 +255,11 @@ class XMLHttpRequestPromise {
         };
         break;
       case 'timeout':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       case 'readystatechange':
-        throw Error('Event function not implemented.');
+        throw Error(`XMLHttpRequestPromise: Event function ${event} not implemented.`);
       default:
-        throw Error('Invalid listener event property.');
+        throw Error(`XMLHttpRequestPromise: Invalid listener event property ${event}.`);
     }
 
     this.upload.addEventListener(event, _function, options);
@@ -215,29 +270,35 @@ class XMLHttpRequestPromise {
    *
    * @param body
    */
-  build(body: Object|FormData) {
+  sendRequest(body: String|Object|FormData) {
+    if (!this._isOpen) {
+      throw Error(`XMLHttpRequestPromise: XMLHttpRequest is not open.`);
+    }
+
     /**
-     *
-     * @param request
-     * @param requestBody
+     * Inner function used to build the Promise.
+     * @param request: XMLHttpRequestPromise (this).
+     * @param requestBody: The Body of the XMLHttpRequest.
+     *    URI Encoded String    -- GET
+     *    Object                -- POST/PUT
+     *    FormData              -- POST/PUT
      * @returns {Promise<any>}
      */
-    let makeRequest = function (request: XMLHttpRequestPromise, requestBody: Object|FormData) {
+    let makeRequest = function (request: XMLHttpRequestPromise, requestBody: String|Object|FormData) {
       return new Promise((resolve, reject) => {
-        request.xhr.open(request.method, request.url, true);
         request.xhr.onload = () => {
-          if (this.status >= 200 && this.status < 300) {
+          if (request.xhr.status >= 200 && request.xhr.status < 300) {
             resolve(request.xhr.response);
           } else {
             reject({
-              status: this.status,
+              status: request.xhr.status,
               statusText: request.xhr.statusText,
             });
           }
         };
         request.xhr.onerror = () => {
           reject({
-            status: this.status,
+            status: request.xhr.status,
             statusText: request.xhr.statusText,
           });
         };
@@ -249,3 +310,5 @@ class XMLHttpRequestPromise {
     return makeRequest(this, body);
   }
 }
+
+export default XMLHttpRequestPromise;
